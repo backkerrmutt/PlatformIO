@@ -9,16 +9,27 @@
 #include <ESP8266HTTPClient.h>
 #include <WiFiClientSecureBearSSL.h>
 #include <ArduinoJson.h>
+#include <TimeLib.h>
+#include <Timezone.h>
+
 
 HeartRateMonitor hrm;                                                                                                                        // สร้าง object จาก library HeartRateMonitor
-const char *serverName = "https://script.google.com/macros/s/AKfycbzNgi8rBw2YHVWN0C24gdBgl0yIXRrOiSUL07lFph005ZOdi9PiR4kQiBXdgH-xRr5i/exec"; // แทนที่ด้วย URL ของ Web app ของคุณ
+const char *serverName = "https://script.google.com/macros/s/AKfycby7A8DrPq3h8AEoJXmGsOCi_Ul304SQdzu18aiWK7k7eak2LQPb2fN9dbFAqE6Llctu/exec"; // แทนที่ด้วย URL ของ Web app ของคุณ
 const char *token = "my_secret_token_db_heart_rate";
 
 WiFiClientSecure client;
 HTTPClient http;
 
+const int capacity = 20; // เก็บข้อมูล 60 ครั้ง (1 นาที)
 unsigned long previousMillis = 0;
-const long interval = 10000; // Interval to send data (e.g., every 10 seconds)
+const long interval = 500;    // Interval to send data (e.g., every 10 seconds)
+StaticJsonDocument<4000> doc; // ขนาดใหญ่ขึ้นเพื่อเก็บข้อมูลทั้งหมด
+JsonArray dataArray = doc.createNestedArray("data");
+int dataindex = 0;
+
+// กำหนดกฎการเปลี่ยนเวลา (ประเทศไทยไม่มีการเปลี่ยนเวลา)
+TimeChangeRule mySTD = {"ICT", Last, Sun, Mar, 2, 420};  // ICT (Indochina Time) UTC +7
+Timezone myTZ(mySTD, mySTD);
 
 float heartrate; // heartrate value
 float spo2;      // spo2 value
@@ -44,6 +55,8 @@ void calculateHeartRate(String name, int Lower_quartile, int Upper_quartile);
 void handleSwitchYellowInterrupt();
 void handleSwitchWhiteInterrupt();
 void handleSwitchRedInterrupt();
+String getFormattedTime();
+time_t getTimeFunction();
 void backtoIDEL();
 void Send_data();
 
@@ -233,7 +246,20 @@ void calculateHeartRate(String name, int Lower_quartile, int Upper_quartile)
       if (currentMillis - previousMillis >= interval)
       {
         previousMillis = currentMillis;
-        Send_data();
+        JsonObject data = dataArray.createNestedObject();
+        data["datetime"] = getFormattedTime();
+        data["heartrate"] = heartrate;
+        data["spo2"] = spo2;
+        if (dataindex >= capacity)
+        {
+          // ส่งข้อมูลทั้งหมด
+          Send_data();
+
+          // ล้างข้อมูลใน array และรีเซ็ตตัวนับ
+          dataArray.clear();
+          dataindex = 0;
+        }
+        dataindex++;
       }
     }
   }
@@ -247,30 +273,25 @@ void Send_data()
   http.begin(client, url); // Use WiFiClientSecure
 
   http.addHeader("Content-Type", "application/json");
-
-  // Create JSON object using ArduinoJson
-  StaticJsonDocument<200> doc;
-  doc["heartrate"] = heartrate; // Replace with your actual data
-  doc["spo2"] = spo2;
-
   String jsonData;
   serializeJson(doc, jsonData);
 
   Serial.print("JSON Data: ");
   Serial.println(jsonData);
 
-  int httpResponseCode = http.POST(jsonData);
+  // int httpResponseCode = 
+  http.POST(jsonData);
 
-  if (httpResponseCode > 0)
-  {
-    Serial.print("POST Success: Status : ");
-    Serial.println(httpResponseCode);
-  }
-  else
-  {
-    Serial.print("POST Error: Status : ");
-    Serial.println(httpResponseCode);
-  }
+  // if (httpResponseCode > 0)
+  // {
+  //   Serial.print("POST Success: Status : ");
+  //   Serial.println(httpResponseCode);
+  // }
+  // else
+  // {
+  //   Serial.print("POST Error: Status : ");
+  //   Serial.println(httpResponseCode);
+  // }
   http.end();
 }
 // backtoIDEL_function start ----------------------------------------------------------
@@ -286,6 +307,20 @@ void backtoIDEL()
   delay(1500);
 }
 // backtoIDEL_function end ----------------------------------------------------------
+
+// date time
+String getFormattedTime() {
+  time_t utc = now();  // เวลาปัจจุบันในรูปแบบ UTC
+  time_t local = myTZ.toLocal(utc);  // แปลงเวลาเป็นเวลาท้องถิ่น
+
+  char buffer[20];
+  sprintf(buffer, "%02d/%02d/%04d %02d:%02d:%02d", month(local), day(local), year(local), hour(local), minute(local), second(local));
+  return String(buffer);
+}
+time_t getTimeFunction() {
+  return now();  // ฟังก์ชันตัวอย่างสำหรับการซิงค์เวลา
+}
+
 
 // interrupt
 void ICACHE_RAM_ATTR handleSwitchYellowInterrupt()
