@@ -6,11 +6,22 @@
 #include <Arduino.h>
 #include <HeartRateMonitor.h>
 #include <BlynkSimpleEsp8266.h>
+#include <ESP8266HTTPClient.h>
+#include <WiFiClientSecureBearSSL.h>
+#include <ArduinoJson.h>
 
-HeartRateMonitor hrm;  // สร้าง object จาก library HeartRateMonitor
+HeartRateMonitor hrm;                                                                                                                        // สร้าง object จาก library HeartRateMonitor
+const char *serverName = "https://script.google.com/macros/s/AKfycbzNgi8rBw2YHVWN0C24gdBgl0yIXRrOiSUL07lFph005ZOdi9PiR4kQiBXdgH-xRr5i/exec"; // แทนที่ด้วย URL ของ Web app ของคุณ
+const char *token = "my_secret_token_db_heart_rate";
+
+WiFiClientSecure client;
+HTTPClient http;
+
+unsigned long previousMillis = 0;
+const long interval = 10000; // Interval to send data (e.g., every 10 seconds)
 
 float heartrate; // heartrate value
-float spo2; // spo2 value
+float spo2;      // spo2 value
 
 // Machine_Stats Values
 const unsigned int IDLE = 0;       // state รอก่อนเลือกโหมด
@@ -34,6 +45,7 @@ void handleSwitchYellowInterrupt();
 void handleSwitchWhiteInterrupt();
 void handleSwitchRedInterrupt();
 void backtoIDEL();
+void Send_data();
 
 // Configure the minimum maximum of heart rate...
 // CHILD
@@ -57,11 +69,12 @@ void setup()
   hrm.WiFiconfig();
 
   Blynk.begin(BLYNK_AUTH_TOKEN, WiFi.SSID().c_str(), WiFi.psk().c_str()); // เริ่ม Blynk
+  client.setInsecure();                                                   // ข้ามการตรวจสอบ SSL
 }
 void loop()
 {
   Blynk.run(); // Run Blynk
-  
+
   // IDLE start -----------------------------------------------------------------------------------------
   if (state == IDLE)
   {
@@ -211,15 +224,57 @@ void calculateHeartRate(String name, int Lower_quartile, int Upper_quartile)
           delay(1000);
         }
       }
+
+      spo2 = hrm.readSpO2();             // read data spo2
       Blynk.virtualWrite(V1, heartrate); // send data to blynk : heartrate
-      spo2 = hrm.readSpO2(); // read data spo2
-      Blynk.virtualWrite(V2, spo2); // send data to blynk : spo2
+      Blynk.virtualWrite(V2, spo2);      // send data to blynk : spo2
+      // send data to database
+      unsigned long currentMillis = millis();
+      if (currentMillis - previousMillis >= interval)
+      {
+        previousMillis = currentMillis;
+        Send_data();
+      }
     }
   }
 }
 // end --------------------------------------------------------------------------------------------------------
 
+// send data to database
+void Send_data()
+{
+  String url = String(serverName) + "?token=" + token;
+  http.begin(client, url); // Use WiFiClientSecure
+
+  http.addHeader("Content-Type", "application/json");
+
+  // Create JSON object using ArduinoJson
+  StaticJsonDocument<200> doc;
+  doc["heartrate"] = heartrate; // Replace with your actual data
+  doc["spo2"] = spo2;
+
+  String jsonData;
+  serializeJson(doc, jsonData);
+
+  Serial.print("JSON Data: ");
+  Serial.println(jsonData);
+
+  int httpResponseCode = http.POST(jsonData);
+
+  if (httpResponseCode > 0)
+  {
+    Serial.print("POST Success: Status : ");
+    Serial.println(httpResponseCode);
+  }
+  else
+  {
+    Serial.print("POST Error: Status : ");
+    Serial.println(httpResponseCode);
+  }
+  http.end();
+}
 // backtoIDEL_function start ----------------------------------------------------------
+
 void backtoIDEL()
 {
   hrm.lcd.clear();

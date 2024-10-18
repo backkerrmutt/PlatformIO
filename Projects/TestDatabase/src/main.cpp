@@ -73,6 +73,7 @@ void Send_data()
   else
   {
     Serial.println("WiFi ถูกตัดการเชื่อมต่อ");
+    
   }
 }
 
