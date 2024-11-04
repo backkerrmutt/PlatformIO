@@ -20,7 +20,7 @@ const char *token = "my_secret_token_db_heart_rate";
 WiFiClientSecure client;
 HTTPClient http;
 
-const int capacity = 20; // เก็บข้อมูล 60 ครั้ง (1 นาที)
+const int capacity = 18; // เก็บข้อมูล 60 ครั้ง (1 นาที) 20
 unsigned long previousMillis = 0;
 const long interval = 500;    // Interval to send data (e.g., every 10 seconds)
 StaticJsonDocument<4000> doc; // ขนาดใหญ่ขึ้นเพื่อเก็บข้อมูลทั้งหมด
@@ -66,7 +66,7 @@ const int ch_Lower_quartile = 75;
 const int ch_Upper_quartile = 110;
 // MIDDLE_AGE
 const int md_Lower_quartile = 60;
-const int md_Upper_quartile = 100;
+const int md_Upper_quartile = 95;
 
 void setup()
 {
@@ -97,7 +97,7 @@ void loop()
       hrm.lcd.setCursor(0, 0);
       hrm.lcd.print("Select a mode...");
       hrm.lcd.setCursor(0, 1);
-      hrm.lcd.print("Child || Mid_Age");
+      hrm.lcd.print("Child || Adult");
     }
     // อ่านค่าจาก button ถ้าเลือก btn_yellow ไปโหมดเด็ก แต้ถ้าเลือก btn_white ไปโหมดวัยกลางคน *** pull-down (กดเป็น 1)
     // btn_red return to IDLE
@@ -127,7 +127,7 @@ void loop()
   // CHILDEN start -----------------------------------------------------------------------------------------
   else if (state == CHILD)
   {
-    String NameOfState = "CHILD MODE";
+    String NameOfState = "MODE CHILD";        
     calculateHeartRate(NameOfState, ch_Lower_quartile, ch_Upper_quartile);
     if (flag_red == true) // red_btn
     {
@@ -145,7 +145,7 @@ void loop()
   // MIDDLE_AGE start -----------------------------------------------------------------------------------------
   else if (state == MIDDLE_AGE)
   {
-    String NameOfState = "MIDDLE AGE";
+    String NameOfState = "Mode Adult";
     calculateHeartRate(NameOfState, md_Lower_quartile, md_Upper_quartile);
     if (flag_red == true) // red_btn
     {
@@ -164,7 +164,7 @@ void loop()
 // คำนวณและแสดงสถานะออก lCD ----------------------------------------------------------------------------
 void calculateHeartRate(String name, int Lower_quartile, int Upper_quartile)
 {
-  heartrate = hrm.calculateBeatAvg();
+  heartrate = hrm.calculateBeatAvg() ;
   Serial.println(heartrate);
   int IntHeartrate = int(heartrate);
   if (heartrate == 0) // ไม่ได้วางนิ้ว
@@ -230,7 +230,7 @@ void calculateHeartRate(String name, int Lower_quartile, int Upper_quartile)
         hrm.lcd.setCursor(13, 0);
         hrm.lcd.print(spo2, 0);
         hrm.lcd.setCursor(0, 1);
-        hrm.lcd.print("BPM is normal ...");
+        hrm.lcd.print("BPM is normal ..."); 
         Serial.println("Heart rate is within normal range.");
         if (heartrate == 0)
         {
@@ -279,19 +279,18 @@ void Send_data()
   Serial.print("JSON Data: ");
   Serial.println(jsonData);
 
-  // int httpResponseCode = 
-  http.POST(jsonData);
+  int httpResponseCode = http.POST(jsonData);
 
-  // if (httpResponseCode > 0)
-  // {
-  //   Serial.print("POST Success: Status : ");
-  //   Serial.println(httpResponseCode);
-  // }
-  // else
-  // {
-  //   Serial.print("POST Error: Status : ");
-  //   Serial.println(httpResponseCode);
-  // }
+  if (httpResponseCode > 0)
+  {
+    Serial.print("POST Success: Status : ");
+    Serial.println(httpResponseCode);
+  }
+  else
+  {
+    Serial.print("POST Error: Status : ");
+    Serial.println(httpResponseCode);
+  }
   http.end();
 }
 // backtoIDEL_function start ----------------------------------------------------------
